@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ru">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, scale=1.0, user-scalable=no">
+    <title>3D Model Movement Game</title>
+</head>
+<body scroll="no" >
+    
+    
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.rawgit.com/mrdoob/three.js/r128/examples/js/loaders/GLTFLoader.js"></script>
+ <script src="three-csg.js"></script>
+  <script src="csg-lib.js"></script>
+ <script src="csg-worker.js"></script>
+    <script>
+
+    
+document.addEventListener('gesturestart', function(e) {
+    e.preventDefault();
+}, false);
+
+document.addEventListener('gesturechange', function(e) {
+    e.preventDefault();
+}, false);
+
+document.addEventListener('gestureend', function(e) {
+    e.preventDefault();
+}, false);
+    
+    
+        let stx=0;
+        let scene, camera, renderer, model;
+     
+        let moveForward = false;
+        let moveBackward = false
+let cam=6
+let carx=3;
+let cary=7;
+let carz=1;
+let speed=0.0
+let forward=false;
+let backward=false;
+povorot=0;
+let line=null;
+
+let terrain=null;
+
+let heightMap=null
+let ball=null
+let camangle=0;
+let plane=null;
+
+let vr=null;
+let wd=window.innerWidth/5;
+
+let scale=null
+let currentDistance=null
+let initialDistance=null
+
+
+
+
+        init();
+        animate();
+
+
+
+function createMeshDifference(meshA, meshB) {
+            const bspA = CSG.fromMesh(meshA);
+            const bspB = CSG.fromMesh(meshB);
+            const resultBSP = bspA.subtract(bspB);
+            const resultMesh = CSG.toMesh(resultBSP, meshA.matrixWorld);
+            resultMesh.material = meshA.material; // Копируем материал
+            return resultMesh;
+        }
+function degtorad(degrees)
+{
+  // Store the value of pi.
+  var pi = Math.PI;
+  // Multiply degrees by pi divided by 180 to convert to radians.
+  return degrees * (pi/180);
+}
+function radtodeg(radians){
+  // Store the value of pi.
+  var pi = Math.PI;
+  // Multiply radians by 180 divided by pi to convert to degrees.
+  return radians * (180/pi);
+}
+
+
+
+async function imageToImageData(image) {
+    return new Promise((resolve, reject) => {
+        // Создаем элемент canvas
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        // Устанавливаем размеры canvas равными размерам изображения
+        canvas.width = image.width;
+        canvas.height = image.height;
+
+        // Рисуем изображение на canvas
+        context.drawImage(image, 0, 0);
+
+        // Получаем ImageData из canvas
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Возвращаем результат
+        resolve(imageData);
+    });
+}
+
+
+      async  function init() {
+            // Сцена
+            scene = new THREE.Scene();
+
+            // Камера
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 800);
+            camera.position.set(6, 6, 5); //Позиция камеры
+           camera
+            // Рендерер
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio( window.devicePixelRatio /2);
+            
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Освещение
+            const light = new THREE.AmbientLight(0xffffff);
+            scene.add(light);
+
+            // Загрузка 3D модели
+            const loader = new THREE.GLTFLoader();
+            loader.load('giga1.glb', function(gltf) {
+                model = gltf.scene;
+                
+               //  Поднимаем модель над плоскостьюrenderer.domElement);
+
+        // Создаем геометрию линии
+        const points = [];
+        points.push(new THREE.Vector3(0, 0, 0)); // Начальная точка
+        points.push(new THREE.Vector3(0, 1, 0)); // Конечная точка
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+        // Создаем материал для линии
+        const material = new THREE.LineBasicMaterial({ color: 0xffffff }); // Белый цвет
+
+        // Создаем линию
+         line = new THREE.Line(geometry, material);
+        scene.add(line);
+  // Создание шара
+            const ballGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+            const ballMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            ball = new THREE.Mesh(ballGeometry, ballMaterial);
+            scene.add(ball);
+        
+               
+                scene.add(model);
+                
+                
+                
+                model.position.z=0
+                
+                model.rotation.y=povorot;
+            }, undefined, function(error) {
+                console.error(error);
+            });
+            
+texture =new THREE.TextureLoader().load('floor.jpeg' );   
+texture2 =new THREE.TextureLoader().load('trava.jpeg' );   
+texture.repeat.set(33,33);
+texture.wrapS =texture.wrapT = THREE.RepeatWrapping;
+
+
+
+
+
+const img = new Image();
+  img.src = "heightmap1.png";
+  await img.decode();
+
+let ggf=await imageToImageData(img);
+
+let size=img.height;
+const geometry = new THREE.PlaneGeometry(size, size, size-1, size-1);
+const material = new THREE.MeshLambertMaterial({ map : texture });
+
+
+     plane = new THREE.Mesh(geometry, material);
+            
+
+let position = geometry.attributes.position;
+            for (let i = 0; i < position.count; i++) {
+                
+                let x=i % size
+                let y=Math.floor(i / size)
+                let ind=(x+y*size)*4
+             const height=ggf.data[ind]/30;//Math.random(1)
+                position.setZ(i, height); // Умножаем на масштаб высоты
+            }
+         console.log(geometry.attributes)
+           plane.scale.z*=0.5
+           plane.scale.x*=0.5
+plane.scale.y*=0.5
+            plane.needsUpdate=true;
+            
+for (let i = 0; i < plane.geometry.attributes.position.count; i++) {
+            const z = plane.geometry.attributes.position.array[i * 3 + 2];
+            if (z > 8.4) { // Условие для возвышенных частей
+                plane.attributes.uv.array[i * 2 ]=0;
+            }
+        }
+            
+            
+            
+            
+            
+plane.rotation.x = -Math.PI / 2;
+
+
+            scene.add(plane);
+            
+        const textureLoader = new THREE.TextureLoader();
+        const skyTexture = textureLoader.load('sky.jpg'); // Замените на URL вашей текстуры
+
+        // Создание сферы
+        const geometry1 = new THREE.SphereGeometry(500, 60, 40); // Большая сфера
+        const material1 = new THREE.MeshBasicMaterial({
+            map: skyTexture,
+            side: THREE.BackSide // Внутренняя сторона сферы будет видимой
+        });
+        const skySphere = new THREE.Mesh(geometry1, material1);
+        scene.add(skySphere);
+            
+            
+            
+            
+            
+            scene.updateMatrixWorld()
+
+            
+            // Обработка движения мыши для поворота
+document.addEventListener('touchstart', (event) => {
+event.preventDefault();
+
+if (event.touches.length === 2) {
+    initialDistance = Math.abs(event.touches[0].clientX - event.touches[1].clientX);
+            }else{
+            stx=event.touches[0].clientX;
+            sty=event.touches[0].clientY;
+            
+            if(sty<100)forward=true;
+    if(sty>window.innerHeight-100)backward=true;
+            }
+            });
+            
+            document.addEventListener('touchend', (event) => {
+                event.preventDefault();
+                forward=false;
+                backward=false;
+                
+            });
+                
+            
+            
+            document.addEventListener('touchmove', (event) => {
+                event.preventDefault();
+                
+                if (initialDistance !== null && event.touches.length === 2) {
+                 currentDistance = Math.abs(event.touches[0].clientX - event.touches[1].clientX);
+                  scale = currentDistance - initialDistance;
+                  cam=scale
+                 
+                }else{
+                
+                
+              //  console.log(event.touches[0].clientX-this.stx);
+            if(sty<100)forward=true;
+              povorot-=(event.touches[0].clientX-stx)/5;
+            //  console.log(povorot)
+              model.rotation.y=degtorad(povorot);
+              
+          
+//camera.position.x =model.position.x+Math.sin(degtorad(povorot+120))*6;
+//camera.position.z = model.position.z+Math.cos(degtorad(povorot+120))*6;
+
+
+camera.lookAt(model.position)
+                
+                
+camangle+=(event.touches[0].clientY-sty)/500; 
+                
+                
+                
+camera.position.y+=(degtorad(camangle))
+            
+                stx=event.touches[0].clientX
+                
+                sty=event.touches[0].clientY
+                
+                // Поворачиваем модель в зависимости от положения мыши
+          }  });
+        }
+
+
+
+function coll(x1, y1, z1, x2, y2, z2, mesh) {
+    // Создаем Raycaster
+    const raycaster = new THREE.Raycaster();
+
+    // Устанавливаем начальную и конечную точки луча
+    const start = new THREE.Vector3(x1, y1, z1);
+    const end = new THREE.Vector3(x2, y2, z2);
+let r1=start.distanceTo(end)
+    // Вычисляем направление луча
+    const direction = new THREE.Vector3().subVectors(end, start).normalize();
+
+    // Устанавливаем луч с начальной точкой и направлением
+    raycaster.set(start, direction);
+
+    // Проверяем пересечения луча с mesh
+    const intersects = raycaster.intersectObject(mesh);
+     // Если есть пересечения, возвращаем первую точку пересечения
+    if (intersects.length > 0) {
+        
+let r2=intersects[0].point.distanceTo(start)
+if(r1>=r2)return intersects[0].point; 
+        // Возвращаем точку пересечения
+    }
+
+    // Если нет пересечений, возвращаем null
+    return null;
+}
+
+
+
+
+function setline(x1,y1,z1,x2,y2,z2){
+
+line.geometry.attributes.position.array[0] = x1
+line.geometry.attributes.position.array[1] = y1
+line.geometry.attributes.position.array[2] = z1 
+line.geometry.attributes.position.array[3] =x2
+line.geometry.attributes.position.array[4] =y2
+line.geometry.attributes.position.array[5] =z2
+            line.geometry.attributes.position.needsUpdate = true; //
+
+            
+    
+    
+    
+}
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+
+
+
+
+
+
+if(forward){
+
+    speed+=0.005;
+    
+}
+
+if(backward){
+     speed-=0.005
+   // carz -= speed * Math.cos(degtorad(povorot-60))
+   // carx -= speed * Math.sin(degtorad(povorot-60))
+}
+
+if(speed!=0){
+carz += speed * Math.cos(degtorad(povorot-60))
+carx += speed * Math.sin(degtorad(povorot-60))
+}
+
+
+//столкновение перед
+let vx =model.position.x+Math.sin(degtorad(povorot-60))*1;
+let vz = model.position.z+Math.cos(degtorad(povorot-60))*1;
+setline(carx,cary,carz,vx,cary,vz)
+vr=coll(carx,cary,carz,vx,cary,vz,plane)
+if(vr!=null){
+    carz -= speed * Math.cos(degtorad(povorot-60))
+    carx -= speed * Math.sin(degtorad(povorot-60))
+ ball.position.x=vr.x
+ ball.position.y=vr.y
+ ball.position.z=vr.z
+ ball.needsUpdate=true;
+ 
+ let gg= createMeshDifference(plane,ball)
+ plane=gg;
+ plane.needsUpdate=true;
+ 
+}
+
+//столкновение зад
+vx =model.position.x+Math.sin(degtorad(povorot+120))*1;
+ vz = model.position.z+Math.cos(degtorad(povorot+120))*1;
+setline(carx,cary,carz,vx,cary,vz)
+vr=coll(carx,cary,carz,vx,cary,vz,plane)
+if(vr!=null){
+    carz += speed * Math.cos(degtorad(povorot-60))
+    carx += speed * Math.sin(degtorad(povorot-60))
+ ball.position.x=vr.x
+ ball.position.y=vr.y
+ ball.position.z=vr.z
+ ball.needsUpdate=true;
+}
+
+
+            
+          if(model!=undefined){
+              
+          let co=coll(carx,cary,carz,carx,cary-0.5,carz,plane)
+          //console.log(`Point`+co);
+         if (co==null)
+          {  
+              cary-=0.05;}else{
+                  carx=co.x
+                  cary=co.y+0.5
+                  carz=co.z
+                //  setline(carx,cary,carz,ballе.position.x,ball.position.y,ball.position.z)
+              }
+}
+model.position.y=cary
+model.position.z=carz
+model.position.x=carx
+
+
+            
+camera.position.x =model.position.x+Math.sin(degtorad(povorot+120))*cam;
+camera.position.z = model.position.z+Math.cos(degtorad(povorot+120))*cam;
+
+
+camera.lookAt(model.position)
+                
+                
+//camangle+=(event.touches[0].clientY-sty)/500; 
+                
+                
+                
+//camera.rotateX(degtorad(camangle))
+                
+            
+//model.position=new THREE.Vector3(carx,cary,carz)
+/*
+const raycaster = new THREE.Raycaster()
+
+raycaster.set(new THREE.Vector3, direction)
+const intersects = raycaster.intersectObject(mesh);
+*/
+
+
+
+
+            renderer.render(scene, camera);
+        }
+
+        
+    </script>
+</body>
+</html>
