@@ -16,7 +16,11 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.rawgit.com/mrdoob/three.js/r128/examples/js/loaders/GLTFLoader.js"></script>
- <script src="three-csg.js"></script>
+
+    
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    
+    <script src="three-csg.js"></script>
   <script src="csg-lib.js"></script>
  <script src="csg-worker.js"></script>
     <script>
@@ -119,6 +123,21 @@ async function imageToImageData(image) {
 
 
       async  function init() {
+
+bridge.send('VKWebAppInit')
+  .then((data) => { 
+    if (data.result) {
+      alert('ok')
+    } else {
+      // Ошибка
+    }
+  })
+  .catch((error) => {
+    
+    alert(error);
+  });
+
+          
             // Сцена
             scene = new THREE.Scene();
 
